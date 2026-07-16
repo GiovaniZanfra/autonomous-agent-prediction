@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "autonomous_agent_prediction"
+version = "0.0.1"
+description = "Kaggle cpompetition where I Submit an agent able to autonomously train a model and submit to a competition"
+authors = [
+  { name = "Giovani" },
+]
+
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    
+]
+requires-python = "~=3.10.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["autonomous_agent_prediction"]
+include = ["pyproject.toml", "autonomous_agent_prediction/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["autonomous_agent_prediction"]
+force-sort-within-sections = true
+
