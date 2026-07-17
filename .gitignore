@@ -184,3 +184,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Kaggle-in-Kaggle build artifacts (rebuilt by notebooks/ or the packaging step)
+submissions/*/submission.zip
+submissions/*/output/
+train_engineered.csv
+test_engineered.csv

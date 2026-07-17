@@ -93,25 +93,68 @@ and reserving a stronger model for where it actually matters (e.g. the coding op
  
 ## Local development data
  
-- `data/train_{01-16}/` — 16 synthetic datasets, each with `train.csv`, `test.csv`,
-  `sample_submission.csv`, `solution.csv`. These are for developing and validating the
-  agent locally before submitting — not for training a fixed model (the agent needs to
-  generalize to new, unseen datasets from the same family).
-- `wheels/` — Python packages for the evaluation system, for local testing.
-- `run_local_eval.py` — evaluates an agent locally against a single dataset.
-- `validate_submission.py` — validates `submission.zip` (structure, spec) without running
-  a full evaluation.
+The starter-kit files live at the **repo root** (as of 2026-07-16 — this was previously
+nested under `data/raw/`, moved back out since):
+ 
+- `wheels/` — `adk_submission` and `kaggle_kaggle` wheels needed by the two scripts below
+  (install via `requirements.txt` at repo root, not on PyPI; requires Python >=3.11).
+- `run_local_eval.py` — evaluates an agent locally against a single dataset. Resolves
+  `--submission-dir` and `--dataset` **relative to its own directory** (the repo root),
+  and always looks for datasets at `<repo_root>/data/<dataset>`.
+- `validate_submission.py` — validates a submission directory/zip (structure, spec)
+  without running a full evaluation. `--agent-dir` is also resolved relative to the
+  script's own directory.
 - `kaggle-kaggle-skill/` — skill for creating/submitting agents; `resources/` has full
-  documentation on the evaluation system and the agent config spec.
-- `.env.example` — LLM API keys for running local evaluation.
+  documentation on the evaluation system, agent config spec, and environment setup.
+- `sample_submission/` — immutable reference template (trivial baseline agent that just
+  submits `sample_submission.csv`). Never edit in place — copy it into
+  `submissions/<experiment_name>/agent/` for real work.
+- `.env.example` — copy to `.env` and add LLM API keys for local evaluation (local eval
+  also needs a container runtime — podman preferred — with the Kaggle sandbox image
+  pulled).
+- `models.yaml` — the competition's model registry; `validate_submission.py` checks every
+  model referenced in an agent config against this file.
+ 
+The actual 16 synthetic datasets (`train.csv`, `test.csv`, `sample_submission.csv`,
+`solution.csv`, `DATA.md` each) live at **`data/raw/train_{01-16}/`** (cookiecutter
+`data/raw` convention — this part did not move). Since `run_local_eval.py` hardcodes
+`<repo_root>/data/<dataset>`, `data/train_01` … `data/train_16` are **symlinks** to
+`raw/train_01` … `raw/train_16` so the harness's expected flat path resolves without
+duplicating ~40MB of data. **Schemas differ across datasets** — don't assume a fixed
+feature-to-type mapping (e.g. `feature_1` is `ordinal` in one dataset, `count` in
+another; some datasets have zero categorical columns). Type columns by inspecting their
+values, not by name or position.
+ 
+### Canonical submission layout (from `kaggle-kaggle-skill/SKILL.md`)
+ 
+```
+submissions/
+└── 01_baseline/
+    ├── agent/                   # agent.yaml MANDATORY at this level
+    │   ├── agent.yaml
+    │   ├── prompts/
+    │   ├── tools/
+    │   └── skills/
+    ├── output/                  # eval traces for this experiment (run_local_eval.py auto-routes here)
+    └── submission.zip           # packaged archive for Kaggle — one per experiment
+```
+ 
+`run_local_eval.py` auto-detects this layout (when `--submission-dir` ends in
+`.../submissions/<name>/agent`) and routes trace output to `submissions/<name>/output/`
+automatically.
+ 
 ## Recommended development workflow
  
-1. Edit `submission/agent.yaml`, `prompts/`, `tools/`, `skills/`.
-2. `python validate_submission.py` to check structure/spec before burning budget.
-3. `python run_local_eval.py` against one or more of the 16 `train_XX` sets to estimate
-   performance and catch sandbox execution bugs.
-4. Package it: `cd submission && zip -r ../submission.zip . && cd -`
-5. Submit `submission.zip` on Kaggle.
+1. Copy `sample_submission/` to `submissions/<experiment_name>/agent/` and edit
+   `agent.yaml`, `prompts/`, `tools/`, `skills/` there.
+2. `uv run python validate_submission.py --agent-dir submissions/<experiment_name>/agent`
+   to check structure/spec before burning budget.
+3. `uv run python run_local_eval.py --submission-dir submissions/<experiment_name>/agent
+   --dataset train_XX --metric roc_auc` against several of the 16 `train_XX` sets to
+   estimate performance and catch sandbox execution bugs — check several, not just one,
+   since low cross-dataset variance is the actual goal.
+4. Package it: `(cd submissions/<experiment_name>/agent && zip -r ../submission.zip .)`
+5. `kaggle competitions submit <slug> -f submissions/<experiment_name>/submission.zip -m "<message>"`.
 ## Architecture patterns from the demo notebooks
  
 Two reference examples (not mandatory, but they show the expected format):
