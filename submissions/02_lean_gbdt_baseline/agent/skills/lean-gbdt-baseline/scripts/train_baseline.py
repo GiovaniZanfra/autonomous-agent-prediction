@@ -45,7 +45,10 @@ def get_backend(name="auto"):
         def fit_predict(X_tr, y_tr, X_val, cat_cols, depth):
             for c in cat_cols:
                 X_tr[c] = X_tr[c].astype("category")
-                X_val[c] = X_val[c].astype("category")
+                # Reuse train's exact category set (not an independent cast) so a
+                # test-only category becomes NaN (a normal missing value to the
+                # model) instead of crashing at predict time on an unseen level.
+                X_val[c] = X_val[c].astype(X_tr[c].dtype)
             model = xgb.XGBClassifier(
                 n_estimators=400,
                 max_depth=depth,
@@ -71,7 +74,10 @@ def get_backend(name="auto"):
         def fit_predict(X_tr, y_tr, X_val, cat_cols, depth):
             for c in cat_cols:
                 X_tr[c] = X_tr[c].astype("category")
-                X_val[c] = X_val[c].astype("category")
+                # Reuse train's exact category set (not an independent cast) so a
+                # test-only category becomes NaN (a normal missing value to the
+                # model) instead of crashing at predict time on an unseen level.
+                X_val[c] = X_val[c].astype(X_tr[c].dtype)
             model = lgb.LGBMClassifier(
                 n_estimators=400,
                 max_depth=depth,
@@ -119,7 +125,10 @@ def get_backend(name="auto"):
         def fit_predict(X_tr, y_tr, X_val, cat_cols, depth):
             for c in cat_cols:
                 X_tr[c] = X_tr[c].astype("category")
-                X_val[c] = X_val[c].astype("category")
+                # Reuse train's exact category set (not an independent cast) so a
+                # test-only category becomes NaN (a normal missing value to the
+                # model) instead of crashing at predict time on an unseen level.
+                X_val[c] = X_val[c].astype(X_tr[c].dtype)
             model = HistGradientBoostingClassifier(
                 max_depth=depth,
                 learning_rate=0.05,
@@ -150,6 +159,18 @@ def get_backend(name="auto"):
         except ImportError:
             continue
     raise RuntimeError("No GBDT backend available (tried xgboost, lightgbm, catboost, hist_gbm)")
+
+
+def read_csv_safe(path):
+    """pandas' default C/python parsers have been observed to *segfault*
+    (not raise) on some files in this dataset family -- a crash that can't be
+    caught from Python and kills the whole session. The pyarrow engine reads
+    the same files correctly (verified byte-for-byte equivalent on a normal
+    file), so use it whenever available."""
+    try:
+        return pd.read_csv(path, engine="pyarrow")
+    except ImportError:
+        return pd.read_csv(path)
 
 
 # --------------------------------------------------------------------------- #
@@ -375,8 +396,8 @@ def main():
             print(f"Error: '{path}' not found.")
             sys.exit(1)
 
-    train_df = pd.read_csv(args.train)
-    test_df = pd.read_csv(args.test)
+    train_df = read_csv_safe(args.train)
+    test_df = read_csv_safe(args.test)
     y = train_df[args.target]
     test_ids = test_df[args.id_col].copy() if args.id_col in test_df.columns else None
 
@@ -489,7 +510,7 @@ def main():
         final_cv, final_cv_std = cv_score_1, cv_std_1
         final_test_proba = test_proba_1
 
-    sample_sub = pd.read_csv(args.sample_submission)
+    sample_sub = read_csv_safe(args.sample_submission)
     id_col_in_sub = [c for c in sample_sub.columns if c != args.target][0]
     if test_ids is None:
         test_ids = sample_sub[id_col_in_sub]
