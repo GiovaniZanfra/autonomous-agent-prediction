@@ -26,18 +26,29 @@ a submission-ready CSV from a model refit on the full training set.
 **Usage via `run_skill_script`** (defaults are the recommended first call):
 ```python
 run_skill_script(
-    skill_name="lean_gbdt_baseline",
+    skill_name="lean-gbdt-baseline",
     script_name="train_baseline.py",
-    args="--train train.csv --test test.csv --sample-submission sample_submission.csv --target target --output submission.csv",
+    args="--train /work/train.csv --test /work/test.csv --sample-submission /work/sample_submission.csv --target target --output /work/submission.csv",
 )
 ```
 
+**IMPORTANT — always use absolute `/work/...` paths for every file argument
+(`--train`/`--test`/`--sample-submission`/`--output`), never relative ones.**
+`run_skill_script` materializes the skill's own files into a fresh temporary directory
+and runs the script there — that directory does NOT contain your problem's
+`train.csv`/`test.csv`, only this skill's bundled scripts, and it is deleted the moment
+the tool call returns. A relative `--train` path will fail with "not found" even though
+the file exists in `/work`; and a relative `--output` path will write the submission CSV
+into that temporary directory, where it vanishes before you can `submit_predictions` it.
+
 **Arguments**:
 - `--train` / `--test` / `--sample-submission`: input CSV paths (defaults: `train.csv`,
-  `test.csv`, `sample_submission.csv`).
+  `test.csv`, `sample_submission.csv` — always override with the absolute `/work/...`
+  path).
 - `--target`: target column name (default: `target`).
 - `--id-col`: row identifier column, passed through untouched (default: `row_id`).
-- `--output`: submission CSV path to write (default: `submission.csv`).
+- `--output`: submission CSV path to write (default: `submission.csv` — always override
+  with an absolute `/work/...` path, e.g. `/work/submission.csv`).
 - `--n-folds`: CV folds (default: 5).
 - `--depth`: GBDT max tree depth (default: 4 — shallow, per the recipe's evidence that
   shallow trees generalize better than deeper ones on this data family).
@@ -87,7 +98,7 @@ implemented in `train_baseline.py` (kept as documented follow-ups rather than co
 they are more involved and less evidenced). Read it via `load_skill_resource`:
 ```python
 load_skill_resource(
-    skill_name="lean_gbdt_baseline",
+    skill_name="lean-gbdt-baseline",
     resource_name="recipe_notes.md",
 )
 ```

@@ -42,6 +42,12 @@ def main():
         default="row_id",
         help="Identifier column to pass through untouched (default: row_id)",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=".",
+        help="Directory to write train_engineered.csv/test_engineered.csv to",
+    )
     args = parser.parse_args()
 
     print(f"Loading datasets: {args.train}, {args.test}...")
@@ -128,9 +134,11 @@ def main():
         train_df[args.target] = target_series
 
     print(f"Engineered shape: train={train_df.shape}, test={test_df.shape}")
-    train_df.to_csv("train_engineered.csv", index=False)
-    test_df.to_csv("test_engineered.csv", index=False)
-    print("Saved train_engineered.csv and test_engineered.csv successfully.")
+    train_out = os.path.join(args.output_dir, "train_engineered.csv")
+    test_out = os.path.join(args.output_dir, "test_engineered.csv")
+    train_df.to_csv(train_out, index=False)
+    test_df.to_csv(test_out, index=False)
+    print(f"Saved {train_out} and {test_out} successfully.")
 
 
 if __name__ == "__main__":

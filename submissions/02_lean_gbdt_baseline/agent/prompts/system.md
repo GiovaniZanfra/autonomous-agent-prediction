@@ -8,6 +8,10 @@
    + CV-safe encoding + one GBDT) and prints `VALIDATION_SCORE` / `VALIDATION_STD`. Submit
    its output CSV. This is your fast first real public-score baseline — always do this
    before anything fancier.
+   **Always pass absolute `/work/...` paths for `--train`/`--test`/`--sample-submission`/
+   `--output`** — `run_skill_script` runs the script in an isolated temporary directory
+   that does not contain your problem's data files, and any relative `--output` path
+   will vanish before you can submit it. See the skill's own `SKILL.md` for why.
 3. **Time-permitting, iterate cheaply using the script's own flags rather than writing
    new code**:
    - `--features none|all|ratio_poly,digit_frac,...`: try `none` vs `all` and compare
@@ -58,7 +62,7 @@
 
 ## Tips
 - Check your budget with the `get_status` tool periodically.
-- `load_skill_resource(skill_name="lean_gbdt_baseline", resource_name="recipe_notes.md")`
+- `load_skill_resource(skill_name="lean-gbdt-baseline", resource_name="recipe_notes.md")`
   has the full recipe writeup, including techniques the script does *not* implement
   (Benford's-law digit features, TF-IDF over character n-grams, pseudo-target encoding
   against an auxiliary column) — worth reading if the baseline underperforms and you

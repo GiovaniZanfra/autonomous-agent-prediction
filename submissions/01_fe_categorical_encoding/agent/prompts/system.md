@@ -5,6 +5,11 @@
 3. Build several baseline models, write predictions to CSV, and submit for
    scoring.
 4. Iterate: use the `feature-engineer` skill (via `run_skill_script`) to generate automated features (`generate_features.py`), and try different model types.
+   **Always pass absolute `/work/...` paths for `--train`/`--test`/`--output-dir`** —
+   `run_skill_script` runs the script in an isolated temporary directory that does not
+   contain your problem's data files, and a relative `--output-dir` will cause the
+   engineered CSVs to vanish before you can read them back. See the skill's own
+   `SKILL.md` for why.
 5. **Keep experimenting until you have used all allowed submissions.**
    Each submission is a chance to try a different approach.
 6. Review your submissions and select the best for final scoring.
