@@ -5,6 +5,155 @@ Prediction submission. Newest entries at the top.
 
 ---
 
+## 2026-07-17 — Third submission: `submissions/03_lean_gbdt_hybrid`
+
+**What it is:** a fork of `01_fe_categorical_encoding`'s workflow (hand-rolled baseline
+submitted first — a safety net that doesn't depend on any skill call succeeding) with its
+weak `feature-engineer` skill swapped for the fixed, far more capable `lean-gbdt-baseline`
+skill from `02` (CV-safe target encoding, engineered features, multi-backend GBDT). Built
+by copying files directly rather than via a notebook, given today's time constraint.
+
+**Two prompt improvements made here that should have been in `02` from the start** (user
+caught this — see [[feedback_agent_prompt_strictness]] in cross-session memory): the old
+"time-permitting, iterate cheaply" language is now a **required** minimum of 3 distinct
+configurations (default, `--features none/all`, alternate `--model`/`--second-model`), each
+logged as `(config, VALIDATION_SCORE, VALIDATION_STD, public_score)`. Also added a required
+ensembling step: if two tried configs have close `VALIDATION_SCORE`s, blend their submission
+CSVs (simple average of the target column) and submit that as an extra candidate.
+
+**Honest framing:** the underlying model/recipe is identical to `02` — same skill, same
+script. The real differences are (a) hand-rolled-baseline-first ordering as a hedge against
+today's path-handling bugfix not being re-verified through a live LLM run (Gemini free-tier
+quota was exhausted), and (b) the two required-not-soft prompt changes above.
+
+**Verified before packaging:** `validate_submission.py` passed structurally; the copied
+`train_baseline.py` was re-run directly (no LLM) against `train_01` from a fake unrelated
+cwd with absolute paths, confirming the copy works and output lands correctly. Not yet
+verified through an actual agent loop (blocked by the same quota issue as the rest of
+today's work) — this is a real gap, not a formality skipped for no reason.
+
+**Submission mechanics:** no Kaggle API credentials are configured in this dev environment
+(no `~/.kaggle/kaggle.json`, no env vars) — the first two submissions were uploaded outside
+this environment too. `submission.zip` was packaged here; actual `kaggle competitions submit`
+is done by the user directly.
+
+---
+
+## 2026-07-17 — Container runtime set up; first real local agent run finds a genuine bug
+
+**Environment finished:** installed podman, enabled `podman.socket`, pulled the official
+sandbox image (`gcr.io/kaggle-images/python`, 25.6GB), added `GEMINI_API_KEY` and
+`DOCKER_HOST=unix:///run/user/1000/podman/podman.sock` to `.env`. This unblocks
+`run_local_eval.py` for the first time — previously only static validation and directly
+invoking modeling scripts (bypassing the LLM) were possible.
+
+**Two infra snags on the way, both fixed:**
+- A bare `uv run python run_local_eval.py` auto-syncs the venv to the root
+  `pyproject.toml`'s `requires-python = "~=3.10.0"` pin (meant for the unrelated
+  cookiecutter package) and silently **deleted** the working 3.12 venv, wiping
+  `adk-submission`/`kaggle-kaggle`/pandas etc. Fix: rebuild `.venv --python 3.12` via
+  `uv venv`/`uv pip install` directly, then always invoke `.venv/bin/python` rather than
+  `uv run` for these two scripts.
+- `litellm`'s MCP codepath imports `orjson`, which isn't in `requirements.txt`. Fixed by
+  installing it directly into `.venv`.
+
+**First real agent-loop run (train_01, `submissions/02_lean_gbdt_baseline`) surfaced a
+genuine, previously-unknown bug — not a fluke, a structural one:** `run_skill_script`
+(from `google.adk.tools.skill_toolset`) materializes a skill's own `scripts/`/`references/`
+/`assets/` files into a **fresh `tempfile.TemporaryDirectory()`**, `chdir`s into it, runs
+the script, then deletes that directory the moment the tool call returns. That directory
+never contains the problem's `/work/train.csv` etc. — only the skill's bundled files.
+Confirmed directly by reading the installed package source, not inferred.
+
+The agent hit exactly this: called `run_skill_script` with the `SKILL.md`-documented
+relative path (`--train train.csv`), got back `Error: 'train.csv' not found.`, then ran
+`pwd && ls -la` via `run_command` (different tool, different cwd — `/work`, where the file
+plainly exists) to debug — and was mid-investigation when Gemini's free-tier quota
+(20 requests/day for `gemini-3.5-flash`, a hard daily cap, not a transient 429) cut the
+run off before it could retry with a fix.
+
+**Both submissions had this bug baked into their own `SKILL.md` examples** (inherited
+from the shared template pattern, not something introduced by hand in just one): relative
+`--train`/`--test`/`--output` paths that were always going to fail under
+`run_skill_script`, plus a `skill_name` typo in both (`feature_engineer` /
+`lean_gbdt_baseline` with underscores, vs. the real hyphenated names in each `SKILL.md`
+frontmatter).
+
+**Fixed properly, not just documented:**
+- `submissions/01_fe_categorical_encoding/agent/skills/feature-engineer/scripts/generate_features.py`
+  had **hardcoded** output filenames (`train_engineered.csv`/`test_engineered.csv` in
+  cwd) with no CLI flag to redirect them — a real code bug, since no prompt wording can
+  fix a hardcoded path. Added a proper `--output-dir` argument.
+- `submissions/02_lean_gbdt_baseline`'s `train_baseline.py` was already parameterized
+  (`args.output`) — that one only needed the `SKILL.md`/`system.md` docs fixed to *use*
+  absolute paths.
+- Both `SKILL.md` files now show absolute `/work/...` paths in their usage examples and
+  explicitly explain *why* (the temp-dir isolation), so the agent doesn't have to
+  rediscover this by trial and error every session. Both `system.md` files got a
+  one-line reminder in the relevant workflow step. Both `skill_name` typos fixed.
+- Verified manually (not via the LLM, since the Gemini free-tier quota was already
+  exhausted for the day): ran each script from a fake unrelated cwd with absolute I/O
+  paths, confirmed outputs land exactly where directed regardless of the script's actual
+  working directory.
+
+**Retroactive implication for the 2026-07-16 entry below:** this is a plausible (not
+confirmed — Kaggle still exposes no trace for graded runs) explanation for why the real
+0.818/0.808 scores looked reasonable despite this bug likely being present in the graded
+runs too — the agent may have spent real effort recovering from/working around exactly
+this path failure (e.g. falling back to hand-rolled code using `run_command`'s working
+`/work` cwd) rather than actually exploring the `--features`/`--model` toggles as
+intended. Still can't know for certain without a trace, but it's a more concrete
+candidate explanation than "noise" alone.
+
+**Not yet done:** none of today's fixes are committed yet. Also still need to re-run the
+local eval end-to-end (blocked until the Gemini free-tier daily quota resets) to confirm
+the fix actually lets the agent complete a full submit → select cycle.
+
+---
+
+## 2026-07-17 — First real Kaggle scores, and why they're inconclusive
+
+**What happened:** submitted both `submission.zip`s to the actual competition (not local
+eval). Real public leaderboard scores came back: **submission 01 (`feature-engineer`,
+freeform LLM-authored modeling) scored 0.818**; **submission 02
+(`lean-gbdt-baseline`, packaged recipe script) scored 0.808**. This is the first time
+the *full* agentic loop — real LLM, real Kaggle model proxy, real sandbox — has actually
+run for either submission; everything before this was either static validation or
+directly invoking the modeling scripts myself, bypassing the LLM entirely.
+
+**Kaggle exposes no execution trace/log for a successful graded submission** — confirmed
+directly, not assumed. There is no way to inspect after the fact what the agent actually
+did (which tools it called, whether it explored flags, how many submissions it used)
+for a real graded run. `parse_eval_trace.py` / `trace_*.json` only exist for **local**
+`run_local_eval.py` runs — they say nothing about what happened on Kaggle's
+infrastructure.
+
+**Why the 0.818 vs 0.808 gap is likely noise, not evidence "01 beat 02":** a ~0.01 AUC
+gap is well inside the fold-to-fold variance we measured locally (`VALIDATION_STD`
+ranged ~0.003–0.05 across the 16 practice datasets in `submissions/02_lean_gbdt_baseline`'s
+own benchmark). A single public-subset draw producing this gap doesn't establish which
+recipe generalizes better — this is exactly the "don't overfit to the public score" trap
+CLAUDE.md warns about, and it cuts both ways: it's equally weak evidence that 02
+under-explored *and* that 01 is the better design.
+
+**Real, unresolved concern surfaced by this**: `submissions/02_lean_gbdt_baseline/agent/prompts/system.md`
+only asks the agent to explore `--features`/`--model` toggles under soft
+"time-permitting, iterate cheaply" language, with **no enforcement** that the tried
+configurations actually differ (resubmitting near-identical configs, or only tweaking
+`--n-folds`/`--depth`, would technically satisfy "keep experimenting until submissions
+run out"). Best guess, not confirmed: more likely than not the agent ran the default
+once or twice and moved on, since nothing in the prompt penalizes that. Two ways to
+actually resolve this rather than keep guessing:
+1. Tighten `system.md` to *require* a minimum number of distinctly different
+   configurations tried before `select_submission` is allowed (a concrete follow-up, not
+   yet done).
+2. Once `data/.env`/API key + container runtime exist (still the blocker — see the
+   2026-07-15 entry), run `run_local_eval.py` against this same agent and inspect the
+   real tool-call trace via `parse_eval_trace.py` to see empirically whether the current
+   prompt induces exploration at all.
+
+---
+
 ## 2026-07-16 — Second submission: `submissions/02_lean_gbdt_baseline` (Recipe 1)
 
 **What was done:** turned a pasted "Recipe 1: Lean GBDT Baseline" writeup (a
