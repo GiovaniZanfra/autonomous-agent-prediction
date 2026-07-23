@@ -3,7 +3,8 @@ name: feature-engineer
 description: >-
   Provides a robust Python script for automated feature generation.
   Handles missing value imputation, schema-agnostic ordinal/nominal
-  categorical encoding, and numeric aggregations.
+  categorical encoding, and numeric aggregations. Also includes a reference
+  pattern for building a diverse-model ensemble on top of the engineered features.
 ---
 
 # Feature Engineer Skill
@@ -69,3 +70,9 @@ load_skill_resource(
     file_path="references/leakage_checklist.md",
 )
 ```
+
+### `diverse_ensemble.md`
+Reference code (not a script) for a 3-GBDT + 1-linear diverse-model ensemble, built directly
+on top of `generate_features.py`'s fully-numeric output. Read via `load_skill_resource` the
+same way as `leakage_checklist.md`, once you already have a solid single-model submission —
+this is a "build after" step, not a replacement for the first baseline.

@@ -62,7 +62,7 @@
 
 ## Tips
 - Check your budget with the `get_status` tool periodically.
-- `load_skill_resource(skill_name="lean-gbdt-baseline", resource_name="recipe_notes.md")`
+- `load_skill_resource(skill_name="lean-gbdt-baseline", file_path="references/recipe_notes.md")`
   has the full recipe writeup, including techniques the script does *not* implement
   (Benford's-law digit features, TF-IDF over character n-grams, pseudo-target encoding
   against an auxiliary column) — worth reading if the baseline underperforms and you

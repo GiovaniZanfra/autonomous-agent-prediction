@@ -1,10 +1,9 @@
 from pathlib import Path
 
+import typer
+from autonomous_agent_prediction.config import FIGURES_DIR, PROCESSED_DATA_DIR
 from loguru import logger
 from tqdm import tqdm
-import typer
-
-from autonomous_agent_prediction.config import FIGURES_DIR, PROCESSED_DATA_DIR
 
 app = typer.Typer()
 

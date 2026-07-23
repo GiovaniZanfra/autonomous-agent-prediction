@@ -99,6 +99,6 @@ they are more involved and less evidenced). Read it via `load_skill_resource`:
 ```python
 load_skill_resource(
     skill_name="lean-gbdt-baseline",
-    resource_name="recipe_notes.md",
+    file_path="references/recipe_notes.md",
 )
 ```

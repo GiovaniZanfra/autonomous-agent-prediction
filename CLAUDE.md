@@ -57,7 +57,18 @@ submission.zip
     └── my-skill/
         ├── SKILL.md        # YAML frontmatter with `name: <skill-name>`
         ├── scripts/        # run via run_skill_script, inside the sandbox
-        └── resources/       # domain-knowledge markdown, via load_skill_resource
+        ├── references/     # domain-knowledge markdown, via load_skill_resource
+        │                   # (file_path arg must be "references/<name>", e.g.
+        │                   # load_skill_resource(skill_name=..., file_path="references/x.md") —
+        │                   # confirmed against the installed google-adk source
+        │                   # (skills/_utils.py, tools/skill_toolset.py): the loader only
+        │                   # scans a directory literally named "references/", and file_path
+        │                   # must start with "references/", "assets/", or "scripts/" or the
+        │                   # call fails with INVALID_RESOURCE_PATH. A directory named
+        │                   # "resources/" (singular grammar, easy to type by mistake) is
+        │                   # silently invisible to load_skill_resource -- this broke every
+        │                   # markdown resource in submissions 01-04 until caught directly.
+        └── assets/         # other files (templates, etc.), via load_skill_resource
 ```
  
 Config rules:
@@ -183,6 +194,40 @@ scripts). More complex, but gives fine-grained control over budget and iteration
   callback), and don't assign a float directly into a `CategoricalDtype` column (cast the
   dtype first).
 - Always verify feature column names match between `train.csv` and `test.csv`.
+
+## Standing policy pattern for every submission
+
+Every submission's skill/system-prompt guidance should be structured as three explicit
+tiers — a shared pattern to write once (e.g. as a `references/submission_policy.md` reused
+across submissions) rather than re-derived or copy-pasted per submission with drift between
+them (this has already happened once: `04`/`05` both carried a stale "apply generously"
+feature-engineering line that a different submission's equivalent guidance never had,
+because each submission's prose was hand-edited independently).
+
+1. **Prohibited/high-risk constructs** — an explicit blocklist, not buried in prose:
+   pseudo-labeling, knowledge distillation, very deep GBDTs, high-order interaction
+   expansion, extra autoencoders, nonlinear meta-model stacking, blind unselected OOF
+   averaging, LB-chasing — plus concrete historical bugs this project actually hit: the
+   `resources/` vs `references/` directory-naming trap (ADK only recognizes `references/`,
+   `assets/`, `scripts/` — see "Required submission.zip structure" above), `run_skill_script`'s
+   temp-dir path bug (materializes into an isolated tempdir with no access to `/work` —
+   prefer `run_command` with absolute paths for anything touching problem data), casting
+   train/val categorical dtypes independently (cast validation to the training column's
+   dtype, not independently), and fitting target/frequency encoding on the full train set
+   instead of per-fold (leaks target information into validation).
+2. **Core policy** — the concrete, non-negotiable engineering constraints for this domain:
+   `seed=0` + `n_jobs=1`/`thread_count=1` on every estimator, schema-agnostic column typing
+   by value inspection (never column name or position — schemas differ across datasets in
+   this family), absolute `/work/...` paths for any tool call touching data, and a
+   baseline submitted before any feature engineering begins.
+3. **Quality guarantee gates** — rules on what may be selected/submitted: CV-vs-public
+   divergence means "distrust this CV, likely a leak in your own code," not "public score is
+   just noisy"; never end a session without at least one `submit_predictions` call; select
+   your final submission(s) by CV, not by whichever attempt happened to score highest
+   publicly; and don't promote an ensemble/variant into your final selection unless it's
+   actually demonstrated (via CV or public score) to beat your best already-submitted single
+   model — building it isn't itself a reason to prefer it.
+
 ## Things to avoid
  
 - Requesting tools outside the harness's allowed list.
